@@ -29,9 +29,22 @@ const EpgTilesType = new GraphQLObjectType({
     name: 'EpgTiles',
     fields: () => ({
         channelId: { type: GraphQLString },
-        tiles: { type: new GraphQLList(EpgTileType) }
+        epgTiles: { type: new GraphQLList(EpgTileType) }
     })
 });
+
+const Tile = new GraphQLObjectType({
+    name: 'Tile',
+    fields: () => ({
+        Title: { type: GraphQLString },
+        Codename: { type: GraphQLString },
+        Id: { type: GraphQLString },
+        OriginEntityId: { type: GraphQLInt },
+        Start: { type: GraphQLString },
+        Stop: { type: GraphQLString },
+        Type:{ type: GraphQLString }
+    })
+})
 
 const UserType = new GraphQLObjectType({
     name: 'User',
@@ -66,15 +79,21 @@ const CompanyType = new GraphQLObjectType({
 })
 
 const prepareEpgTiles = channels => reduce(channels,
-    (stack, tiles, channelId) => [
+    (stack, epgTiles, channelId) => [
         ...stack,
         {
             channelId,
-            tiles
+            epgTiles
         }
     ],
     []
 )
+
+const api = axios.create({
+    headers: {
+        'X-Api-Date-Format': 'iso'
+    }
+});
 
 const RootQuery = new GraphQLObjectType({
     name: 'RootQueryType',
@@ -103,7 +122,7 @@ const RootQuery = new GraphQLObjectType({
                     .then(response => response.data);
             }
         },
-        epgTiles: {
+        filterTiles: {
             type: GraphQLList(EpgTilesType),
             args: {
                 platformCodename: { type: GraphQLString },
@@ -112,15 +131,14 @@ const RootQuery = new GraphQLObjectType({
                 orChannelCodenames: { type: GraphQLList(GraphQLString) }
             },
             resolve(parentValue, { from, to, orChannelCodenames, platformCodename }) {
-                const response = axios.post(
+                const response = api.post(
                     `https://api-demo.app.insysgo.pl/v1/EpgTile/FilterProgramTiles`,
                     { from, to, orChannelCodenames, platformCodename }
-                ).then(({ data }) => {
-                    console.log(data);
-                    return data
-                });
+                ).then(
+                    ({ data: { Programs } }) => prepareEpgTiles(Programs)
+                );
 
-                return prepareEpgTiles(response.Programs);
+                return response;
             }
         }
     }
