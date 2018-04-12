@@ -1,5 +1,6 @@
 const graphQl = require('graphql');
 const axios = require('axios');
+const reduce = require('lodash/reduce');
 
 const {
     GraphQLObjectType,
@@ -11,6 +12,26 @@ const {
 } = graphQl;
 
 const dataServerAdress = 'http://localhost:3000'
+
+const EpgTileType = new GraphQLObjectType({
+    name: 'EpgTile',
+    fields: () => ({
+        Codename: { type: GraphQLString },
+        From: { type: GraphQLString },
+        Id: { type: GraphQLString },
+        OriginEntityId: { type: GraphQLInt },
+        To: { type: GraphQLString },
+        Type:{ type: GraphQLString }
+    })
+});
+
+const EpgTilesType = new GraphQLObjectType({
+    name: 'EpgTiles',
+    fields: () => ({
+        channelId: { type: GraphQLString },
+        tiles: { type: new GraphQLList(EpgTileType) }
+    })
+});
 
 const UserType = new GraphQLObjectType({
     name: 'User',
@@ -44,6 +65,17 @@ const CompanyType = new GraphQLObjectType({
     })
 })
 
+const prepareEpgTiles = channels => reduce(channels,
+    (stack, tiles, channelId) => [
+        ...stack,
+        {
+            channelId,
+            tiles
+        }
+    ],
+    []
+)
+
 const RootQuery = new GraphQLObjectType({
     name: 'RootQueryType',
     fields: {
@@ -69,6 +101,26 @@ const RootQuery = new GraphQLObjectType({
             resolve(parentValue, args) {
                 return axios.get(`${dataServerAdress}/companies/${args.id}`)
                     .then(response => response.data);
+            }
+        },
+        epgTiles: {
+            type: GraphQLList(EpgTilesType),
+            args: {
+                platformCodename: { type: GraphQLString },
+                from: { type: GraphQLString },
+                to: { type: GraphQLString },
+                orChannelCodenames: { type: GraphQLList(GraphQLString) }
+            },
+            resolve(parentValue, { from, to, orChannelCodenames, platformCodename }) {
+                const response = axios.post(
+                    `https://api-demo.app.insysgo.pl/v1/EpgTile/FilterProgramTiles`,
+                    { from, to, orChannelCodenames, platformCodename }
+                ).then(({ data }) => {
+                    console.log(data);
+                    return data
+                });
+
+                return prepareEpgTiles(response.Programs);
             }
         }
     }
